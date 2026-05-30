@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pilgrimage Map — Char Dham &amp; Jyotirling</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--saffron:#e8852b;--done:#2e7d4f;--ink:#3b2a1a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0}
+
+  .panel{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    background:rgba(255,250,243,.96);border:1px solid #e3cba8;border-radius:14px;
+    padding:14px 16px;box-shadow:0 6px 20px rgba(120,80,30,.22);
+    width:240px;backdrop-filter:blur(4px);
+  }
+  .panel h1{font-size:1.05rem;color:#c5651a;margin-bottom:2px}
+  .panel .om{color:#c5651a}
+  .panel .sub{font-size:.72rem;color:#8a7256;margin-bottom:10px}
+  .bar{height:11px;background:#f0ddc4;border-radius:20px;overflow:hidden;margin:6px 0}
+  .fill{height:100%;width:0;background:linear-gradient(90deg,var(--done),#46a06a);transition:width 1.2s ease}
+  .plabel{font-size:.74rem;font-weight:600;color:var(--done);text-align:center;margin-bottom:12px}
+  .legend{font-size:.78rem;display:grid;gap:6px}
+  .legend .row{display:flex;align-items:center;gap:8px;color:#6a5440}
+  .pin{width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .pin.d{background:var(--done)}
+  .pin.p{background:var(--saffron)}
+  .filters{margin-top:12px;font-size:.74rem;display:grid;gap:5px}
+  .filters label{display:flex;align-items:center;gap:7px;cursor:pointer;color:#6a5440}
+  .filters input{accent-color:var(--saffron)}
+
+  .leaflet-popup-content{font-family:"Segoe UI",sans-serif;margin:12px 14px}
+  .pop-name{font-size:1rem;font-weight:700;color:var(--ink)}
+  .pop-loc{font-size:.78rem;color:#917a63;margin-bottom:6px}
+  .pop-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+  .tag{font-size:.66rem;padding:2px 8px;border-radius:20px;background:#f3e4cf;color:#8a5a1f}
+  .pop-status{font-size:.8rem;font-weight:600}
+  .pop-status.d{color:var(--done)}
+  .pop-status.p{color:var(--saffron)}
+  .gmap{display:inline-block;margin-top:8px;font-size:.74rem;color:#1a73e8;text-decoration:none}
+  .gmap:hover{text-decoration:underline}
+  @media(max-width:600px){.panel{width:200px;top:8px;left:8px;padding:11px 12px}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h1><span class="om">ॐ</span> Yatra Map</h1>
+  <div class="sub">Char Dham &amp; 12 Jyotirling</div>
+  <div class="bar"><div class="fill" id="fill"></div></div>
+  <div class="plabel" id="plabel"></div>
+  <div class="legend">
+    <div class="row"><span class="pin d"></span> Visited</div>
+    <div class="row"><span class="pin p"></span> Planned</div>
+  </div>
+  <div class="filters">
+    <label><input type="checkbox" data-cat="Big 4 Dham" checked> Big 4 Dham</label>
+    <label><input type="checkbox" data-cat="Chhota Char Dham" checked> Chhota Char Dham</label>
+    <label><input type="checkbox" data-cat="12 Jyotirling" checked> 12 Jyotirling</label>
+  </div>
+</div>
+
+<script>
+const sites = [
+  {name:"Badrinath", loc:"Uttarakhand", lat:30.7433, lng:79.4938, done:false,
+    tags:["Big 4 Dham · North","Chhota Char Dham · Vishnu"], cats:["Big 4 Dham","Chhota Char Dham"]},
+  {name:"Ramanathaswamy (Rameswaram)", loc:"Tamil Nadu", lat:9.2881, lng:79.3174, done:false,
+    tags:["Big 4 Dham · South","Jyotirling #11"], cats:["Big 4 Dham","12 Jyotirling"]},
+  {name:"Jagannath Puri", loc:"Odisha", lat:19.8048, lng:85.8180, done:false,
+    tags:["Big 4 Dham · East"], cats:["Big 4 Dham"]},
+  {name:"Dwarka", loc:"Gujarat", lat:22.2403, lng:68.9686, done:true,
+    tags:["Big 4 Dham · West"], cats:["Big 4 Dham"]},
+
+  {name:"Kedarnath", loc:"Uttarakhand", lat:30.7346, lng:79.0669, done:false,
+    tags:["Chhota Char Dham · Shiva","Jyotirling #5"], cats:["Chhota Char Dham","12 Jyotirling"]},
+  {name:"Gangotri", loc:"Uttarakhand", lat:30.9947, lng:78.9398, done:false,
+    tags:["Chhota Char Dham · Ganga"], cats:["Chhota Char Dham"]},
+  {name:"Yamunotri", loc:"Uttarakhand", lat:31.0139, lng:78.4600, done:false,
+    tags:["Chhota Char Dham · Yamuna"], cats:["Chhota Char Dham"]},
+
+  {name:"Somnath", loc:"Gujarat", lat:20.8880, lng:70.4012, done:false,
+    tags:["Jyotirling #1"], cats:["12 Jyotirling"]},
+  {name:"Mallikarjuna", loc:"Andhra Pradesh", lat:16.0731, lng:78.8682, done:false,
+    tags:["Jyotirling #2"], cats:["12 Jyotirling"]},
+  {name:"Mahakaleshwar", loc:"Ujjain, Madhya Pradesh", lat:23.1828, lng:75.7682, done:true,
+    tags:["Jyotirling #3"], cats:["12 Jyotirling"]},
+  {name:"Omkareshwar", loc:"Madhya Pradesh", lat:22.2425, lng:76.1510, done:false,
+    tags:["Jyotirling #4"], cats:["12 Jyotirling"]},
+  {name:"Bhimashankar", loc:"Maharashtra", lat:19.0716, lng:73.5354, done:true,
+    tags:["Jyotirling #6"], cats:["12 Jyotirling"]},
+  {name:"Kashi Vishwanath", loc:"Varanasi, Uttar Pradesh", lat:25.3109, lng:83.0107, done:false,
+    tags:["Jyotirling #7"], cats:["12 Jyotirling"]},
+  {name:"Trimbakeshwar", loc:"Maharashtra", lat:19.9320, lng:73.5306, done:true,
+    tags:["Jyotirling #8"], cats:["12 Jyotirling"]},
+  {name:"Baidyanath", loc:"Deoghar, Jharkhand", lat:24.4924, lng:86.7000, done:false,
+    tags:["Jyotirling #9"], cats:["12 Jyotirling"]},
+  {name:"Nageshwar", loc:"Gujarat", lat:22.3360, lng:69.0863, done:true,
+    tags:["Jyotirling #10"], cats:["12 Jyotirling"]},
+  {name:"Grishneshwar", loc:"Ellora, Maharashtra", lat:20.0257, lng:75.1790, done:true,
+    tags:["Jyotirling #12"], cats:["12 Jyotirling"]},
+];
+
+const map = L.map('map').setView([22.5, 79], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:18, attribution:'© OpenStreetMap contributors'
+}).addTo(map);
+
+function pinIcon(done){
+  return L.divIcon({
+    className:'',
+    html:`<div class="pin ${done?'d':'p'}" style="width:20px;height:20px"></div>`,
+    iconSize:[20,20], iconAnchor:[10,20], popupAnchor:[0,-18]
+  });
+}
+
+const markers = [];
+sites.forEach(s=>{
+  const m = L.marker([s.lat,s.lng],{icon:pinIcon(s.done)});
+  const g = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`;
+  m.bindPopup(`
+    <div class="pop-name">${s.name}</div>
+    <div class="pop-loc">${s.loc}</div>
+    <div class="pop-tags">${s.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    <div class="pop-status ${s.done?'d':'p'}">${s.done?'✓ Visited':'○ Planned'}</div>
+    <a class="gmap" href="${g}" target="_blank">Open in Google Maps ↗</a>
+  `);
+  m.cats = s.cats;
+  m.addTo(map); markers.push(m);
+});
+
+// fit to all
+map.fitBounds(L.latLngBounds(sites.map(s=>[s.lat,s.lng])).pad(0.12));
+
+// filters
+document.querySelectorAll('.filters input').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    const active = new Set([...document.querySelectorAll('.filters input:checked')].map(i=>i.dataset.cat));
+    markers.forEach(m=>{
+      const show = m.cats.some(c=>active.has(c));
+      if(show){ if(!map.hasLayer(m)) m.addTo(map);} else { map.removeLayer(m);}
+    });
+  });
+});
+
+// progress (unique sites)
+const done = sites.filter(s=>s.done).length;
+const pct = Math.round(done/sites.length*100);
+setTimeout(()=>document.getElementById('fill').style.width=pct+'%',250);
+document.getElementById('plabel').textContent = `${done} of ${sites.length} sites · ${pct}%`;
+</script>
+</body>
+</html>
